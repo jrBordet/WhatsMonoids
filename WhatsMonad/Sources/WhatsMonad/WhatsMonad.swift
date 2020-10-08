@@ -24,20 +24,61 @@ public func <^><A, B>(
     a.map(f)
 }
 
+public func <^><A, B>(
+    _ f: @escaping(A) -> B,
+    _ a: [A]
+) -> [B] {
+    a.map(f)
+}
+
+public func <^><A, B>(
+    _ f: @escaping(A) -> B,
+    _ a: A?
+) -> B? {
+    a.map(f)
+}
+
 infix operator <*>: Apply
 
 func <*><A, B>(
     _ f: Maybe<(A) -> B>,
-    a: Maybe<A>
+    _ a: Maybe<A>
 ) -> Maybe<B> {
     a.apply(f)
 }
 
 func <*><A, B>(
     _ f: [(A) -> B],
-    a: [A]
+    _ a: [A]
 ) -> [B] {
     a.apply(f)
+}
+
+func <^><A, B>(
+    _ f: [(A) -> B],
+    _ a: [A]
+) -> [B] {
+    a.apply(f)
+}
+
+infix operator <|>
+
+public func <|><A>(
+    _ a: Maybe<A>,
+    _ alternative: Maybe<A>
+) -> Maybe<A> {
+    ifVal(a, alternative)
+}
+
+public func ifVal<A>(
+    _ a: Maybe<A>,
+    _ alternative: Maybe<A>
+) -> Maybe<A> {
+    guard case .value = a else {
+        return alternative
+    }
+    
+    return a
 }
 
 extension Array {
@@ -67,9 +108,23 @@ public func apply<A, B>(
 
 infix operator >>-: FlatMap
 
-func >>-<A, B>(_ a: Maybe<A>, f: @escaping(A) -> Maybe<B>) -> Maybe<B> {
-    return a.flatMap(f)
+func >>-<A, B> (_ a: Maybe<A>, f: @escaping(A) -> Maybe<B>) -> Maybe<B> {
+    a.flatMap(f)
 }
+
+//infix operator >>>: FlatMap
+//
+//func >>><A, B> (_ f: @escaping(A) -> Maybe<B>) -> (Maybe<A>) -> Maybe<B> {
+//    flatMap(f)
+//}
+
+//The monad composition operator (also known as the Kleisli composition operator) is defined in Control.Monad:
+
+//prefix operator >=>
+//
+//public prefix func >=> <A, B>(_ f: @escaping(A) -> Maybe<B>) -> (Maybe<A>) -> Maybe<B> {
+//    flatMap(f)
+//}
 
 public func pipe<A, B, C>(
     _ f: @escaping (A) -> B,
@@ -163,6 +218,42 @@ func map<A, B>(
             return .none
         case let  .value(t):
             return .value(f(t))
+        }
+    }
+}
+
+infix operator >=>: FlatMap
+
+func >=><A, B, C>(
+    _ lhs: @escaping(A) -> Maybe<B>,
+    _ rhs: @escaping(B) -> Maybe<C>
+) -> (A) -> Maybe<C> {
+    return { a in
+        //lhs(a).flatMap(rhs)
+        flatMap(rhs)(lhs(a))
+    }
+}
+
+func kleisli<A, B, C>(
+    _ lhs: @escaping(A) -> Maybe<B>,
+    _ rhs: @escaping(B) -> Maybe<C>
+) -> (A) -> Maybe<C> {
+    return { a in
+        lhs(a).flatMap(rhs)
+    }
+}
+
+func flatMap<A, B>(_ f: @escaping(A) -> Maybe<B>) -> (Maybe<A>) -> Maybe<B> {
+    return { fA in
+        guard case let .value(a) = fA else {
+            return .none
+        }
+        
+        switch f(a) {
+        case .none:
+            return .none
+        case let .value(b):
+            return Maybe<B>(b)
         }
     }
 }
